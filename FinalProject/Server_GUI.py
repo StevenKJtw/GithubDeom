@@ -1,6 +1,7 @@
 import socket
 import threading
 import sys
+from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton, QLineEdit, QVBoxLayout, QFormLayout, QHBoxLayout, QGridLayout, QTextEdit
 from PyQt5.QtWidgets import (QWidget, QLabel, QLineEdit,QTextEdit, QGridLayout, QApplication)
 #from InitDB import DataBaseChatRoom as db
@@ -42,16 +43,17 @@ class Server:
         massage = ("Now lets chat, " +nickname)
         self.mylist.append(myconnection)
         myconnection.send(massage.encode())
-        massage1 = ("\t\tSYSTEM: "+nickname+ " in the chat room")
+        massage1 = ("SYSTEM: "+nickname+ " in the chat room")
         global a
         a+=1
+        myconnection.send(("SYSTEM: " + str(a) + " people in the chat room").encode())
         for c in self.mylist:
             if c.fileno() != connNumber:
                 try:
                     c.send(massage1.encode())
                 except:
                     pass
-                massage2 = ("\t\tSYSTEM: " + str(a) + " people in the chat room")
+                massage2 = ("SYSTEM: " + str(a) + " people in the chat room")
                 c.send(massage2.encode())
         while True:
             try:
@@ -71,8 +73,9 @@ class Server:
                     for c in self.mylist:
                         if c.fileno() != connNumber:
                             try:
-                                c.send(b'\t\tSYSTEM: ' + nickname.encode()+b' is leave chat room')
-                                c.send(b'\t\tSYSTEM: ' + str(a).encode() +b' people in the chat room')
+                                c.send("SYSTEM: " + nickname.encode()+"b is leave chat room")
+                                c.send("SYSTEM: " + str(a) + " people in the chat room")
+                                #Client_GUI.MainWindow.labe_Number_of_people.setText("目前聊天室有" + str(a) + "人")
                             except:
                                 pass
 
@@ -106,12 +109,6 @@ class Server:
 class MainWindow(QWidget):
     def __init__(self):
         super(self.__class__, self).__init__()
-        self.setupUi()
-        self.show()
-        th1 = threading.Thread(target=self.connect)
-        th1.setDaemon(True)
-        th1.start()
-        th1.join
 
         self.client = MongoClient('localhost', 27017)  # 比较常用
         self.database = self.client["ChatRoom"]  # SQL: Database Name
@@ -119,12 +116,12 @@ class MainWindow(QWidget):
         # s = Server('140.138.145.25', 5550)
         # while True:
         #     s.checkConnection() # 連線~~
-
-    def hello(self):
-        self.line_hello.setText("hello")
-
-    def cancel(self):
-        self.line_hello.setText("")
+        self.setupUi()
+        self.show()
+        th1 = threading.Thread(target=self.connect)
+        th1.setDaemon(True)
+        th1.start()
+        th1.join
 
     def setupUi(self):
         self.resize(500,400)
@@ -158,6 +155,19 @@ class MainWindow(QWidget):
 
         self.passwprd = QLineEdit()
 
+        self.groupBox = QtWidgets.QGroupBox(self)
+        self.groupBox.setGeometry(QtCore.QRect(49, 39, 201, 211))
+        self.groupBox.setObjectName("groupBox")
+        i = 0
+        for user in self.collection.find():
+            i += 1
+            self.checkBox = QtWidgets.QCheckBox(self.groupBox)
+            self.checkBox.setGeometry(QtCore.QRect(30, 0 + i * 30, 85, 19))
+            self.checkBox.setObjectName(user['uname'])
+            self.checkBox.setText(user['uname'])
+
+        #th_for_users = threading.Thread(target=self.users)
+
         grid = QGridLayout()
         grid.setSpacing(12)
         grid.addWidget(self.label, 0, 1)    #name_lable
@@ -167,38 +177,54 @@ class MainWindow(QWidget):
         grid.addWidget(self.Password, 0, 4) #password_lable
 
         grid.addWidget(self.button_Login, 1, 1,1,4) #login_button
+        grid.addWidget(self.groupBox, 4, 0, 6, 5)
 
-        grid.addWidget(self.showchat, 4, 0, 6, 5)   #showchat
+        #grid.addWidget(self.showchat, 4, 0, 6, 5)   #showchat
         #grid.addWidget(self.chat, 5, 0, 5, 5)
         grid.addWidget(self.button_cancel, 8, 0, 5, 5)
 
         self.setLayout(grid)
         self.button_Login.clicked.connect(self.login)
-        self.button_cancel.clicked.connect(self.showText)
+        self.button_cancel.clicked.connect(self.delete)
 
 
     def login(self):
         # 取得 輸入的 nickname
         text1=self.name.text()
-        text2=self.passwprd.text()
+        text2=self.Password.text()
         self.collection.insert_one({'uname': text1, 'upwd': text2})
+        self.name.setText("")
+        self.Password.setText("")
 
-        #　設定button 可按與不可按
-        # self.name.setEnabled(False)
-        # self.button_cancel.setEnabled(True)
-        # self.button_Login.setEnabled(False)
-        # #　將值傳給server
-        # self.sock.send(text.encode())
+        i = 0;
+        for a in self.groupBox.findChildren(QtWidgets.QCheckBox):
+            i += 1
 
-    def showText(self):
-        #　將值傳給server
-        self.sock.send(self.chat.text().encode())
-        #  同時將自己輸入的值印在chat上
-        self.showchat.append("\t\t" + self.chat.text() + " : You")
+        self.newCheckBox = QtWidgets.QCheckBox(self.groupBox)
+        self.newCheckBox.setGeometry(QtCore.QRect(30,1 + i * 30, 85, 19))
+        self.newCheckBox.setObjectName(text1)
+        self.newCheckBox.setText(text1)
+
+        self.show()
+
+
+    def delete(self):
+        i=0;
+        for a in self.groupBox.findChildren(QtWidgets.QCheckBox):
+            i+=1
+            a.setGeometry(QtCore.QRect(30, 0 + i * 30, 85, 19))
+            if(a.isChecked()):
+                #print(a.text())
+                i-=1
+                self.collection.delete_one({'uname': a.text()})
+                a.deleteLater()
+        self.show()
 
     def connect(self):
-        s = Server('140.138.145.25', 5550)
-        s.checkConnection() # 連線~~
+        s = Server('192.168.43.50', 5550)
+        while True:
+            s.checkConnection()
+
 
 # class DataBaseChatRoom:
 #     def __init__(self):
